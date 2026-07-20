@@ -24,8 +24,7 @@ func main() {
 	db.Connect()
 
 	// ─────────────────────────────────────────
-	// 의존성 주입 — 아래에서 위로 생성
-	// Repository → Service → Handler
+	// 의존성 주입 — Repository → Service → Handler
 	// ─────────────────────────────────────────
 	userRepo := repository.NewUserRepository(db.DB)
 	roomRepo := repository.NewRoomRepository(db.DB)
@@ -41,6 +40,11 @@ func main() {
 	userHandler := handler.NewUserHandler(userSvc)
 	chatHandler := handler.NewChatHandler(roomSvc, messageSvc)
 	friendHandler := handler.NewFriendHandler(friendSvc)
+
+	// Hub 생성 + goroutine으로 실행
+	hub := handler.NewHub(messageSvc)
+	go hub.Run()
+	wsHandler := handler.NewWebSocketHandler(hub)
 
 	// ─────────────────────────────────────────
 	// Gin 설정
@@ -58,7 +62,10 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok", "service": "kakao-clone"})
 	})
 
-	// 인증
+	// WebSocket — 토큰을 쿼리 파라미터로 받으므로 미들웨어 밖에 위치
+	r.GET("/ws", wsHandler.Handle)
+
+	// 인증 라우트
 	auth := r.Group("/auth")
 	{
 		auth.POST("/register", authHandler.Register)
